@@ -1,0 +1,35 @@
+# Standard: Textdateien mit LF-Endungen normalisieren
+* text=auto eol=lf
+
+# Quelltextdateien explizit LF
+*.ps1   text eol=lf
+*.psm1  text eol=lf
+*.psd1  text eol=lf
+*.py    text eol=lf
+*.sh    text eol=lf
+*.json  text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.toml  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+
+# Windows-Batchs behalten CRLF
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Binärdateien nie konvertieren
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
+*.7z   binary
+*.tar  binary
+*.gz   binary
+*.rar  binary
+*.exe  binary
+*.dll  binary
+*.pyd  binary

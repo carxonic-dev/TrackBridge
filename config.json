@@ -1,0 +1,28 @@
+{
+  "OutputDirectory": "D:\\Projekte\\20_DATA\\Playlist_export_spotify",
+  "DefaultFormat": "json",
+  "YTDLP_TextFilePattern": "spotify_{playlist_id}_yt-dlp.txt",
+
+  "AudioPreferredFormats": ["m4a", "aac", "mp3", "flac", "alac"],
+  "MaxParallelDownloads": 2,
+  "AudioOutputExtension": "m4a",
+  "AudioFilenameTemplate": "{track_number_padded} {title_sanitized}",
+  "MaxFilenameLength": 80,
+  "DownloadMaxRetries": 2,
+
+  "RegistryEnabled": true,
+  "SkipExistingFiles": true,
+  "KnownAudioExtensions": [
+    "m4a", "aac", "mp3", "flac", "alac",
+    "aiff", "aif", "wav",
+    "webm", "opus"
+  ],
+
+  "DJCompatibilityProfile": "cdj2000nxs2",
+  "DJWarnOnIncompatible": true,
+  "DenyWAVCompletely": false,
+
+  "AllowReencodeForIncompatible": true,
+  "PreferredHighQualityTarget": "aiff",
+  "RemoveSourceAfterReencode": true
+}
