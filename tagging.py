@@ -1,3 +1,4 @@
+"""
 # tagging.py
 from pathlib import Path
 from typing import Mapping, Any
@@ -18,3 +19,4 @@ def apply_tags_to_file(audio_path: Path, meta: Mapping[str, Any]) -> None:
     else:
         # für exotische Formate ggf. später nachrüsten
         return
+"""

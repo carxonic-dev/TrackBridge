@@ -37,24 +37,31 @@ def sanity_check() -> bool:
 
 def build_parser() -> argparse.ArgumentParser:
     """
-    Baut den Argument-Parser für das CLI-Tool.
+    Baut den CLI-Parser für spotify_2_yt-dlp.
 
     Subcommands:
-      - sanity-check
-      - export
-      - export-ytdlp
-      - plan-downloads
-      - run-downloads
-      - analyze-playlist
+    - sanity-check
+    - export
+    - export-ytdlp
+    - plan-downloads
+    - run-downloads
+    - analyze-playlist
     """
     parser = argparse.ArgumentParser(
         prog="spotify_2_yt-dlp",
-        description="CLI-Tool zum Export von öffentlichen Spotify-Playlists und Download per yt-dlp.",
+        description=(
+            "CLI-Tool zum Exportieren von Spotify-Playlists und automatischem "
+            "Download per yt-dlp."
+        ),
     )
 
     subparsers = parser.add_subparsers(
+        title="Befehle",
         dest="command",
-        required=True,
+        metavar=(
+            "{sanity-check,export,export-ytdlp,"
+            "plan-downloads,run-downloads,analyze-playlist}"
+        ),
     )
 
     # ------------------------------------------------------------------
@@ -62,7 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------
     sanity_parser = subparsers.add_parser(
         "sanity-check",
-        help="Prüft Zugriff auf Spotify (Token-Test).",
+        help="Prüft Zugriff auf Spotify (Token-Test) und Basis-Konfiguration.",
     )
     sanity_parser.set_defaults(func=handle_sanity_check)
 
@@ -71,23 +78,27 @@ def build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------
     export_parser = subparsers.add_parser(
         "export",
-        help="Exportiert eine öffentliche Playlist nach JSON.",
+        help="Exportiert eine öffentliche Playlist als Extended-JSON.",
     )
     export_parser.add_argument(
         "--playlist-id",
         required=True,
-        help="Spotify-Playlist-ID (z. B. 37i9dQZF1DX0Yxoavh5qJV).",
-    )
-    export_parser.add_argument(
-        "--output",
-        type=str,
-        help="Optionaler Pfad zur Ausgabedatei (Standard: spotify_playlist_<ID>.json im Output-Ordner).",
+        help="Spotify-Playlist-ID (z.B. 3ENm4IUzswtJ2i0LBYQBSr).",
     )
     export_parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Optional: Anzahl der zu exportierenden Tracks begrenzen (z. B. 10).",
+        help="Optional: maximale Anzahl zu exportierender Tracks (Standard: alle).",
+    )
+    export_parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help=(
+            "Optional: Ausgabedatei. Wenn nicht gesetzt, wird ein Standardpfad "
+            "basierend auf der config.json verwendet."
+        ),
     )
     export_parser.set_defaults(func=handle_export_playlist)
 
@@ -96,23 +107,30 @@ def build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------
     export_ytdlp_parser = subparsers.add_parser(
         "export-ytdlp",
-        help="Erzeugt eine yt-dlp-Trackliste (Textdatei mit ytsearch1:Artist - Title).",
+        help=(
+            "Erzeugt eine yt-dlp-Trackliste (Textdatei mit "
+            "Zeilen im Format 'ytsearch1:Artist - Title')."
+        ),
     )
     export_ytdlp_parser.add_argument(
         "--playlist-id",
         required=True,
-        help="Spotify-Playlist-ID (z. B. 37i9dQZF1DX0Yxoavh5qJV).",
-    )
-    export_ytdlp_parser.add_argument(
-        "--output",
-        type=str,
-        help="Optionaler Pfad zur Ausgabedatei (Standard: laut config.json/OutputDirectory).",
+        help="Spotify-Playlist-ID, die als Basis für die Suchliste dient.",
     )
     export_ytdlp_parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Optional: Anzahl der zu exportierenden Tracks begrenzen.",
+        help="Optional: maximale Anzahl zu exportierender Tracks (Standard: alle).",
+    )
+    export_ytdlp_parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help=(
+            "Optional: Ausgabedatei für die Textliste. "
+            "Wenn nicht gesetzt, wird ein Standardpfad verwendet."
+        ),
     )
     export_ytdlp_parser.set_defaults(func=handle_export_ytdlp)
 
@@ -122,20 +140,32 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser = subparsers.add_parser(
         "plan-downloads",
         help=(
-            "Erzeugt eine Download-Planung für yt-dlp auf Basis der "
-            "Extended-JSON einer Playlist (Dry-Run, keine echten Downloads)."
+            "Erzeugt eine Download-Planung (Dry-Run) für yt-dlp auf Basis einer "
+            "Spotify-Playlist bzw. einer Extended-JSON."
         ),
     )
-    plan_parser.add_argument(
+
+    plan_source = plan_parser.add_mutually_exclusive_group(required=True)
+    plan_source.add_argument(
         "--playlist-id",
-        required=True,
-        help="Spotify-Playlist-ID (muss zuvor mit 'export' exportiert worden sein).",
+        help=(
+            "Spotify-Playlist-ID. Die Extended-JSON wird bei Bedarf automatisch erzeugt."
+        ),
     )
+    plan_source.add_argument(
+        "--json",
+        type=str,
+        help=(
+            "Pfad zu einer bereits exportierten Extended-JSON-Datei, die als "
+            "Grundlage für die Planung genutzt wird."
+        ),
+    )
+
     plan_parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Optional: Anzahl der geplanten Tracks begrenzen (z. B. 10).",
+        help="Optional: maximale Anzahl geplanter Downloads (Standard: alle).",
     )
     plan_parser.set_defaults(func=handle_plan_downloads)
 
@@ -146,19 +176,31 @@ def build_parser() -> argparse.ArgumentParser:
         "run-downloads",
         help=(
             "Startet die Downloads für eine Playlist basierend auf der "
-            "Extended-JSON (nutzt yt-dlp)."
+            "Extended-JSON (nutzt yt-dlp, parallele Worker, Retry-Logik)."
         ),
     )
-    run_parser.add_argument(
+
+    run_source = run_parser.add_mutually_exclusive_group(required=True)
+    run_source.add_argument(
         "--playlist-id",
-        required=True,
-        help="Spotify-Playlist-ID (muss zuvor mit 'export' exportiert worden sein).",
+        help=(
+            "Spotify-Playlist-ID. Die Extended-JSON wird bei Bedarf automatisch erzeugt."
+        ),
     )
+    run_source.add_argument(
+        "--json",
+        type=str,
+        help=(
+            "Pfad zu einer bereits exportierten Extended-JSON-Datei, die als "
+            "Grundlage für die Downloads genutzt wird."
+        ),
+    )
+
     run_parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Optional: Anzahl der zu ladenden Tracks begrenzen (z. B. 10).",
+        help="Optional: maximale Anzahl tatsächlicher Downloads (Standard: alle).",
     )
     run_parser.set_defaults(func=handle_run_downloads)
 
@@ -168,16 +210,34 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser = subparsers.add_parser(
         "analyze-playlist",
         help=(
-            "Analysiert den lokalen Playlist-Ordner und zeigt eine Übersicht "
-            "über Formate & DJ-Kompatibilität."
+            "Analysiert eine Playlist im lokalen Dateisystem (Formate, "
+            "DJ-Kompatibilität, Duplikate, fehlende Tracks)."
         ),
     )
-    analyze_parser.add_argument(
-        "--playlist-id",
-        required=True,
-        help="Spotify-Playlist-ID, deren Zielordner analysiert werden soll.",
+
+    analyze_source = analyze_parser.add_mutually_exclusive_group(required=True)
+    analyze_source.add_argument(
+        "--playlist-path",
+        type=str,
+        help=(
+            "Pfad zum lokalen Playlist-Ordner mit heruntergeladenen Dateien "
+            "(z.B. OutputRoot/<playlist-id>/)."
+        ),
     )
+    analyze_source.add_argument(
+        "--playlist-id",
+        type=str,
+        help=(
+            "Spotify-Playlist-ID. Der lokale Pfad wird aus der config/Logik abgeleitet."
+        ),
+    )
+
     analyze_parser.set_defaults(func=handle_analyze_playlist)
+
+    # ------------------------------------------------------------------
+    # Fallback: wenn kein Subcommand angegeben wurde
+    # ------------------------------------------------------------------
+    parser.set_defaults(func=None)
 
     return parser
 
