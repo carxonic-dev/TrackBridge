@@ -235,7 +235,11 @@ def fetch_playlist_tracks_extended(
 # Exporte: JSON + yt-dlp-Textfile
 # ---------------------------------------------------------------------------
 
-def export_playlist_to_json(playlist_id: str, output_path: Path | None = None) -> Path:
+def export_playlist_to_json(
+    playlist_id: str,
+    output_path: Path | None = None,
+    limit: int | None = None,
+) -> Path:
     """
     Exportiert eine öffentliche Playlist als Extended-JSON-Datei
     mit Top-Level-Struktur { playlist: {...}, tracks: [...] }.
@@ -261,6 +265,7 @@ def export_playlist_to_json(playlist_id: str, output_path: Path | None = None) -
 def export_playlist_to_ytdlp_txt(
     playlist_id: str,
     output_path: Path | None = None,
+    limit: int | None = None,
 ) -> Path:
     """
     Erzeugt eine Textdatei mit Such-Queries für yt-dlp.

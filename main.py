@@ -7,15 +7,12 @@ from playlist_exporter import (
     export_playlist_to_json,
     export_playlist_to_ytdlp_txt,
 )
-
 from yt_dlp_runner import (
     plan_downloads_for_playlist,
     print_download_plan,
     run_downloads_for_playlist,
 )
-
 from spotify_client import get_access_token, SpotifyAuthError
-from yt_dlp_runner import plan_downloads_for_playlist, print_download_plan
 from collection_analyzer import analyze_playlist_folder
 
 
@@ -39,21 +36,39 @@ def sanity_check() -> bool:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """
+    Baut den Argument-Parser für das CLI-Tool.
+
+    Subcommands:
+      - sanity-check
+      - export
+      - export-ytdlp
+      - plan-downloads
+      - run-downloads
+      - analyze-playlist
+    """
     parser = argparse.ArgumentParser(
         prog="spotify_2_yt-dlp",
-        description="CLI-Tool zum Export von öffentlichen Spotify-Playlists.",
+        description="CLI-Tool zum Export von öffentlichen Spotify-Playlists und Download per yt-dlp.",
     )
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+    )
 
+    # ------------------------------------------------------------------
     # sanity-check
+    # ------------------------------------------------------------------
     sanity_parser = subparsers.add_parser(
         "sanity-check",
         help="Prüft Zugriff auf Spotify (Token-Test).",
     )
     sanity_parser.set_defaults(func=handle_sanity_check)
 
+    # ------------------------------------------------------------------
     # export
+    # ------------------------------------------------------------------
     export_parser = subparsers.add_parser(
         "export",
         help="Exportiert eine öffentliche Playlist nach JSON.",
@@ -66,33 +81,49 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument(
         "--output",
         type=str,
-        help="Optionaler Pfad zur Ausgabedatei (Standard: spotify_playlist_<ID>.json).",
+        help="Optionaler Pfad zur Ausgabedatei (Standard: spotify_playlist_<ID>.json im Output-Ordner).",
     )
-    export_parser.set_defaults(func=handle_export)
+    export_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Optional: Anzahl der zu exportierenden Tracks begrenzen (z. B. 10).",
+    )
+    export_parser.set_defaults(func=handle_export_playlist)
 
-        # export-ytdlp
-    ytdlp_parser = subparsers.add_parser(
+    # ------------------------------------------------------------------
+    # export-ytdlp
+    # ------------------------------------------------------------------
+    export_ytdlp_parser = subparsers.add_parser(
         "export-ytdlp",
         help="Erzeugt eine yt-dlp-Trackliste (Textdatei mit ytsearch1:Artist - Title).",
     )
-    ytdlp_parser.add_argument(
+    export_ytdlp_parser.add_argument(
         "--playlist-id",
         required=True,
         help="Spotify-Playlist-ID (z. B. 37i9dQZF1DX0Yxoavh5qJV).",
     )
-    ytdlp_parser.add_argument(
+    export_ytdlp_parser.add_argument(
         "--output",
         type=str,
-        help="Optionaler Pfad zur Ausgabedatei (Standard: laut config.json).",
+        help="Optionaler Pfad zur Ausgabedatei (Standard: laut config.json/OutputDirectory).",
     )
-    ytdlp_parser.set_defaults(func=handle_export_ytdlp)
+    export_ytdlp_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Optional: Anzahl der zu exportierenden Tracks begrenzen.",
+    )
+    export_ytdlp_parser.set_defaults(func=handle_export_ytdlp)
 
-        # plan-downloads
+    # ------------------------------------------------------------------
+    # plan-downloads
+    # ------------------------------------------------------------------
     plan_parser = subparsers.add_parser(
         "plan-downloads",
         help=(
             "Erzeugt eine Download-Planung für yt-dlp auf Basis der "
-            "Extended-JSON einer Playlist (Dry-Run, keine Downloads)."
+            "Extended-JSON einer Playlist (Dry-Run, keine echten Downloads)."
         ),
     )
     plan_parser.add_argument(
@@ -103,11 +134,14 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument(
         "--limit",
         type=int,
+        default=None,
         help="Optional: Anzahl der geplanten Tracks begrenzen (z. B. 10).",
     )
     plan_parser.set_defaults(func=handle_plan_downloads)
 
-        # run-downloads
+    # ------------------------------------------------------------------
+    # run-downloads
+    # ------------------------------------------------------------------
     run_parser = subparsers.add_parser(
         "run-downloads",
         help=(
@@ -123,11 +157,14 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--limit",
         type=int,
+        default=None,
         help="Optional: Anzahl der zu ladenden Tracks begrenzen (z. B. 10).",
     )
     run_parser.set_defaults(func=handle_run_downloads)
 
-        # analyze-playlist
+    # ------------------------------------------------------------------
+    # analyze-playlist
+    # ------------------------------------------------------------------
     analyze_parser = subparsers.add_parser(
         "analyze-playlist",
         help=(
@@ -142,71 +179,79 @@ def build_parser() -> argparse.ArgumentParser:
     )
     analyze_parser.set_defaults(func=handle_analyze_playlist)
 
-
     return parser
 
 
+# ----------------------------------------------------------------------
+# Handler-Funktionen für die Subcommands
+# ----------------------------------------------------------------------
+
+
 def handle_sanity_check(args: argparse.Namespace) -> None:  # noqa: ARG001
+    """
+    Handler für `sanity-check`.
+    """
     ok = sanity_check()
     if ok:
-        print("[CLI] Sanity check OK - Projekt bereit für weitere Aktionen.")
+        print("[CLI] Sanity check OK – Projekt bereit für weitere Aktionen.")
     else:
-        print("[CLI] Sanity check FEHLGESCHLAGEN - bitte .env / Netzwerk prüfen.")
+        print("[CLI] Sanity check FEHLGESCHLAGEN – bitte .env / Netzwerk prüfen.")
 
 
-def handle_run_downloads(args: argparse.Namespace) -> None:
-    playlist_id: str = args.playlist_id
-    limit: int | None = args.limit
-
-    try:
-        run_downloads_for_playlist(playlist_id, limit=limit)
-    except FileNotFoundError as exc:
-        print(f"[CLI] Fehler: {exc}")
-    except Exception as exc:  # noqa: BLE001
-        print(f"[CLI] Unerwarteter Fehler beim Download-Run: {exc}")
-
-
-def handle_export(args: argparse.Namespace) -> None:
+def handle_export_playlist(args: argparse.Namespace) -> None:
+    """
+    Handler für `export`.
+    """
     playlist_id: str = args.playlist_id
     output_arg: str | None = args.output
+    limit: int | None = getattr(args, "limit", None)
 
     output_path = Path(output_arg) if output_arg else None
-    path = export_playlist_to_json(playlist_id, output_path)
 
     try:
-        path = export_playlist_to_json(playlist_id, output_path)
+        json_path = export_playlist_to_json(
+            playlist_id=playlist_id,
+            output_path=output_path,
+            limit=limit,
+        )
     except Exception as exc:  # noqa: BLE001
-        print(f"[CLI] Fehler beim Export der Playlist: {exc}")
+        print(f"[CLI] Fehler beim JSON-Export: {exc}")
         return
 
-    print(f"[CLI] Export erfolgreich.")
+    print("[CLI] Export erfolgreich.")
     print(f"[CLI] Playlist-ID: {playlist_id}")
-    print(f"[CLI] Ausgabe: {path.resolve()}")
+    print(f"[CLI] Ausgabe: {json_path.resolve()}")
 
 
 def handle_export_ytdlp(args: argparse.Namespace) -> None:
+    """
+    Handler für `export-ytdlp`.
+    """
     playlist_id: str = args.playlist_id
     output_arg: str | None = args.output
+    limit: int | None = getattr(args, "limit", None)
 
     output_path = Path(output_arg) if output_arg else None
 
     try:
-        path = export_playlist_to_ytdlp_txt(playlist_id, output_path)
+        path = export_playlist_to_ytdlp_txt(
+            playlist_id=playlist_id,
+            output_path=output_path,
+            limit=limit,
+        )
     except Exception as exc:  # noqa: BLE001
         print(f"[CLI] Fehler beim Export der yt-dlp-Trackliste: {exc}")
         return
 
-    print(f"[CLI] yt-dlp-Trackliste erfolgreich erstellt.")
+    print("[CLI] yt-dlp-Trackliste erfolgreich erstellt.")
     print(f"[CLI] Playlist-ID: {playlist_id}")
     print(f"[CLI] Ausgabe: {path.resolve()}")
 
-def handle_analyze_playlist(args: argparse.Namespace) -> None:
-    playlist_id: str = args.playlist_id
-    analyze_playlist_folder(playlist_id)
-
-
 
 def handle_plan_downloads(args: argparse.Namespace) -> None:
+    """
+    Handler für `plan-downloads`.
+    """
     playlist_id: str = args.playlist_id
     limit: int | None = args.limit
 
@@ -222,7 +267,33 @@ def handle_plan_downloads(args: argparse.Namespace) -> None:
     print_download_plan(jobs)
 
 
+def handle_run_downloads(args: argparse.Namespace) -> None:
+    """
+    Handler für `run-downloads`.
+    """
+    playlist_id: str = args.playlist_id
+    limit: int | None = args.limit
+
+    try:
+        run_downloads_for_playlist(playlist_id, limit=limit)
+    except FileNotFoundError as exc:
+        print(f"[CLI] Fehler: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[CLI] Unerwarteter Fehler beim Download-Run: {exc}")
+
+
+def handle_analyze_playlist(args: argparse.Namespace) -> None:
+    """
+    Handler für `analyze-playlist`.
+    """
+    playlist_id: str = args.playlist_id
+    analyze_playlist_folder(playlist_id)
+
+
 def main() -> None:
+    """
+    Einstiegspunkt für das CLI.
+    """
     parser = build_parser()
     args = parser.parse_args()
     func = getattr(args, "func", None)
