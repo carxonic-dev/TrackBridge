@@ -64,6 +64,13 @@ D:\Projekte\20_DATA/
 *.m4a
 *.opus
 *.wav
+*.mp3
+*.flac
+*.mp4
+*.avi
+*.mkv
+data/
+downloads/
 
 # Logs & Output
 logs/
@@ -72,3 +79,37 @@ logs/
 # SQLite Datenbanken
 *.sqlite
 *.db
+
+# Playlist Exporte
+spotify_playlist_*.json
+smoketest_playlist_*.json
+meine_playlist.json
+# YouTube DL/YTDLP Exporte
+yt-dlp_spotify_playlist_*.json
+yt-dlp_meine_playlist.json
+# Test Exporte
+test_export_*.json
+# Debug Exporte
+debug_export_*.json
+debug_registries_*.json
+# Analyse Exporte
+analysis_*.json
+# Plan Downloads Exporte
+download_plan_*.json
+# Download Ergebnisse Exporte
+download_results_*.json
+# Tagging Exporte
+tagged_playlist_*.json
+
+
+# Lokale Konfig
+config.json
+
+# Exportierte Playlists & Tests
+spotify_playlist_*.json
+smoketest_playlist_*.json
+meine_playlist.json
+
+# Registry DB explizit
+data/track_registry.db
+data/playlist_registry.db

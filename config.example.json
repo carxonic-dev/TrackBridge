@@ -1,5 +1,8 @@
 {
-  "OutputDirectory": "D:\\Projekte\\20_DATA\\Playlist_export_spotify",
+  "SpotifyClientId": "",
+  "SpotifyClientSecret": "",
+
+  "OutputDirectory": "D:/Projekte/20_DATA/Playlist_export_spotify",
   "DefaultFormat": "json",
   "YTDLP_TextFilePattern": "spotify_{playlist_id}_yt-dlp.txt",
 
