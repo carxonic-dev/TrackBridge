@@ -84,6 +84,7 @@ logs/
 spotify_playlist_*.json
 smoketest_playlist_*.json
 meine_playlist.json
+
 # YouTube DL/YTDLP Exporte
 yt-dlp_spotify_playlist_*.json
 yt-dlp_meine_playlist.json
@@ -113,3 +114,4 @@ meine_playlist.json
 # Registry DB explizit
 data/track_registry.db
 data/playlist_registry.db
+
