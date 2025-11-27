@@ -58,10 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(
         title="Befehle",
         dest="command",
-        metavar=(
-            "{sanity-check,export,export-ytdlp,"
-            "plan-downloads,run-downloads,tag-playlist,analyze-playlist}"
-        ),
+    metavar=(
+        "{sanity-check,export,export-ytdlp,"
+        "plan-downloads,run-downloads,tag-playlist,analyze-playlist,debug-registry}"
+    ),
+
     )
 
     # ------------------------------------------------------------------
@@ -265,6 +266,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     analyze_parser.set_defaults(func=handle_analyze_playlist)
 
+
+    # ------------------------------------------------------------------
+    # debug-registry
+    # ------------------------------------------------------------------
+    debug_parser = subparsers.add_parser(
+        "debug-registry",
+        help="Zeigt eine einfache Statistik zur Track-Registry (Tracks, Files, URLs, Missing Files).",
+    )
+    debug_parser.set_defaults(func=handle_debug_registry)
+
+
     # ------------------------------------------------------------------
     # Fallback: wenn kein Subcommand angegeben wurde
     # ------------------------------------------------------------------
@@ -397,6 +409,32 @@ def handle_tag_playlist(args: argparse.Namespace) -> None:
         limit=args.limit,
         update_registry=update_registry,
     )
+
+
+def handle_debug_registry(args: argparse.Namespace) -> None:
+    """
+    CLI-Handler für den Befehl 'debug-registry'.
+
+    Gibt eine einfache Statistik zur Track-Registry auf STDOUT aus.
+    """
+    try:
+        from track_registry import get_registry_stats
+    except Exception as exc:  # noqa: BLE001
+        print(f"[REG-DEBUG] Konnte Registry-Modul nicht laden: {exc}")
+        return
+
+    try:
+        stats = get_registry_stats()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[REG-DEBUG] Fehler beim Lesen der Registry: {exc}")
+        return
+
+    print("====== REGISTRY-STATS ======")
+    print(f"Tracks gesamt:           {stats.get('tracks', 0)}")
+    print(f"Files gesamt:            {stats.get('files', 0)}")
+    print(f"Tracks mit URL:          {stats.get('tracks_with_url', 0)}")
+    print(f"Missing Files (Flag!=0): {stats.get('missing_files', 0)}")
+    print("============================")
 
 
 def main() -> None:

@@ -279,6 +279,51 @@ def get_track(spotify_track_id: str) -> Optional[TrackInfo]:
         )
 
 
+def get_registry_stats() -> dict[str, int]:
+    """
+    Liefert eine einfache Statistik über die Registry-Bestände.
+
+    Rückgabewerte:
+    - tracks: Gesamtanzahl Einträge in 'tracks'
+    - files: Gesamtanzahl Einträge in 'files'
+    - tracks_with_url: Anzahl Tracks mit gesetzter source_url
+    - missing_files: Anzahl Dateien mit is_missing != 0
+    """
+    stats: dict[str, int] = {
+        "tracks": 0,
+        "files": 0,
+        "tracks_with_url": 0,
+        "missing_files": 0,
+    }
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+
+        # Anzahl Tracks
+        cur.execute("SELECT COUNT(*) FROM tracks;")
+        row = cur.fetchone()
+        stats["tracks"] = int(row[0]) if row and row[0] is not None else 0
+
+        # Anzahl Files
+        cur.execute("SELECT COUNT(*) FROM files;")
+        row = cur.fetchone()
+        stats["files"] = int(row[0]) if row and row[0] is not None else 0
+
+        # Tracks mit URL
+        cur.execute(
+            "SELECT COUNT(*) FROM tracks WHERE source_url IS NOT NULL AND TRIM(source_url) <> '';"
+        )
+        row = cur.fetchone()
+        stats["tracks_with_url"] = int(row[0]) if row and row[0] is not None else 0
+
+        # Missing Files
+        cur.execute("SELECT COUNT(*) FROM files WHERE is_missing != 0;")
+        row = cur.fetchone()
+        stats["missing_files"] = int(row[0]) if row and row[0] is not None else 0
+
+    return stats
+
+
 # ---------------------------------------------------------------------------
 # File-Operationen
 # ---------------------------------------------------------------------------
