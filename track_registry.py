@@ -264,7 +264,7 @@ def _insert_file_for_track(
     stat = path.stat() if path.exists() else None
 
     file_size = stat.st_size if stat is not None else None
-    mtime = int(stat.st_mtime) if stat is not None else None
+    mtime = int(stat.st_mtime) if stat is not None else 0
 
     with get_connection() as conn:
         cur = conn.cursor()
@@ -292,9 +292,10 @@ def _insert_file_for_track(
                 now,
             ),
         )
-        file_id = cur.lastrowid
-
+    file_id = cur.lastrowid
+    assert file_id is not None  # Für Pylance & für dich als Sanity-Check
     return int(file_id)
+
 
 
 def _get_best_file_row(spotify_track_id: str) -> Optional[tuple]:

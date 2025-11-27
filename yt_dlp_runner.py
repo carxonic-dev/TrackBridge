@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 from queue import Queue, Empty
+from tagging import apply_tags_to_file
 
 from config import (
     OUTPUT_DIRECTORY,
@@ -14,8 +15,6 @@ from config import (
     KNOWN_AUDIO_EXTENSIONS,
     DJ_COMPATIBILITY_PROFILE,
     DJ_WARN_ON_INCOMPATIBLE,
-    # ALLOW_REENCODE_FOR_INCOMPATIBLE,
-    # PREFERRED_HIGH_QUALITY_TARGET,
 )
 
 from format_profiles import is_ext_compatible_with_active_profile
@@ -24,10 +23,8 @@ from reencode_engine import reencode_if_needed
 import subprocess
 import threading
 import time
-
 import json
 
-from config import OUTPUT_DIRECTORY, MAX_PARALLEL_DOWNLOADS, DOWNLOAD_MAX_RETRIES
 from util_filenames import build_audio_filename
 
 # ---------------------------------------------------------------------------
@@ -62,6 +59,7 @@ class DownloadJob:
     output_stem: str  # Dateiname ohne Extension
     spotify_track_id: str | None = None
     spotify_url: str | None = None
+    track_meta: Dict[str, Any] | None = None  # Extended-JSON-Daten für Tagging
 
 
 # ---------------------------------------------------------------------------
@@ -116,9 +114,9 @@ def build_jobs_from_playlist_data(
     """
     Erzeugt eine Liste von DownloadJob-Objekten aus der Extended-JSON.
 
-    -Titel & Artist kommen aus 'title' / 'primary_artist'
-    -Dateiname wird auf Basis von build_audio_filename() gebaut
-    -Zielverzeichnis:
+    - Titel & Artist kommen aus 'title' / 'primary_artist'
+    - Dateiname wird auf Basis von build_audio_filename() gebaut
+    - Zielverzeichnis:
       - Default: OUTPUT_DIRECTORY / playlist_id  (pro Playlist ein Unterordner)
     """
     tracks: List[Dict[str, Any]] = data.get("tracks", [])
@@ -142,8 +140,6 @@ def build_jobs_from_playlist_data(
             # Irgendwas sehr kaputtes, überspringen
             continue
 
-        # Wir nutzen den gleichen Dateinamen wie im JSON vorgeschlagen
-        # (könnten aber zur Sicherheit erneut bauen)
         track_number = t.get("track_number")
         suggested_filename = t.get("suggested_filename") or build_audio_filename(
             title,
@@ -174,6 +170,7 @@ def build_jobs_from_playlist_data(
             output_stem=output_stem,
             spotify_track_id=spotify_track_id,
             spotify_url=spotify_url,
+            track_meta=t,  # Extended-JSON-Daten für Tagging
         )
         jobs.append(job)
 
@@ -267,6 +264,7 @@ def print_download_plan(jobs: List[DownloadJob]) -> None:
         print(f"       yt-dlp:    {' '.join(cmd)}")
         print()
 
+
 def _find_downloaded_file(job: DownloadJob) -> Path | None:
     """
     Versucht, die tatsächlich heruntergeladene Audiodatei für einen Job
@@ -279,6 +277,7 @@ def _find_downloaded_file(job: DownloadJob) -> Path | None:
         if candidate.exists():
             return candidate
     return None
+
 
 def _run_single_job(job: DownloadJob) -> bool:
     """
@@ -336,7 +335,6 @@ def _run_single_job(job: DownloadJob) -> bool:
         print(f"[ERROR] Unerwarteter Fehler beim Start von yt-dlp: {exc}")
         return False
 
-
     if result.returncode == 0:
         print(
             f"[OK] Download abgeschlossen: "
@@ -371,8 +369,18 @@ def _run_single_job(job: DownloadJob) -> bool:
                     f"[RUN] Aktive HQ-Datei für diesen Track: {new_path.name}"
                 )
 
-        return True
+            # 3) Tagging-Hook: Metadaten aus Extended-JSON anwenden
+            if job.track_meta is not None:
+                try:
+                    apply_tags_to_file(downloaded, job.track_meta)
+                    print(f"[TAG] Tags angewendet: {downloaded.name}")
+                except Exception as exc:  # noqa: BLE001
+                    print(
+                        f"[TAG-ERROR] Tagging fehlgeschlagen für "
+                        f"{downloaded.name}: {exc}"
+                    )
 
+        return True
 
     print(
         f"[ERROR] Download fehlgeschlagen (rc={result.returncode}): "
@@ -421,6 +429,7 @@ def _worker_thread(
         results[job.track_index] = success
         queue.task_done()
 
+
 def run_downloads_for_playlist(
     playlist_id: str,
     limit: int | None = None,
@@ -464,7 +473,7 @@ def run_downloads_for_playlist(
                         f"[RUN] Retry geplant für "
                         f"{job.primary_artist} - {job.title}"
                     )
-                        # optionaler kleiner Backoff
+                    # optionaler kleiner Backoff
                     time.sleep(1.0)
 
             results[job.track_index] = success
@@ -503,6 +512,7 @@ def run_downloads_for_playlist(
 
     _print_summary(jobs, results_parallel)
 
+
 def _print_summary(
     jobs: List[DownloadJob],
     results: Dict[int, bool],
@@ -531,3 +541,4 @@ def _print_summary(
                     f"- #{job.track_index + 1:02d} | "
                     f"{job.primary_artist} - {job.title}"
                 )
+# Ende yt_dlp_runner.py

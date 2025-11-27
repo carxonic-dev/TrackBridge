@@ -7,7 +7,6 @@ Dieses Projekt nutzt zwei Debugger:
 
 Beide sind in der `.venv` installiert und können direkt verwendet werden.
 
-
 ---
 
 ## 1. ipdb (schneller Inline-Debugger)
@@ -35,7 +34,6 @@ def run_with_ipdb() -> None:
     print(f"[ipdb-demo] Ergebnis: {res}")
 ```
 
-
 ### 1.2 Wichtige ipdb-Befehle
 
 | Befehl       | Wirkung                                                                 |
@@ -62,9 +60,8 @@ ipdb> c        # weiterlaufen lassen
 
 ## 2. pudb (Vollbild-Terminal-Debugger / TUI)
 
-**TUI = Text User Interface**  
+**TUI = Text User Interface**
 → Vollbildoberfläche im Terminal mit Code, Variablen, Stack, Breakpoints, Watches.
-
 
 ### 2.1 Breakpoint setzen
 
@@ -87,7 +84,6 @@ def run_with_pudb() -> None:
     print(f"[pudb-demo] Ergebnis: {res}")
 ```
 
-
 ### 2.2 Start aus dem Terminal
 
 ```powershell
@@ -97,7 +93,6 @@ python -m debug_tools.debug_example
 # Variante 2: beliebiges Skript
 python -m pudb main.py
 ```
-
 
 ### 2.3 Navigation in pudb (Basis)
 
@@ -111,10 +106,9 @@ python -m pudb main.py
 
 Außerdem:
 
-- Linkes Panel → Code mit aktuellem Zeilenmarker  
-- Rechts oben → Variablen (locals / globals)  
+- Linkes Panel → Code mit aktuellem Zeilenmarker
+- Rechts oben → Variablen (locals / globals)
 - Rechts unten → Stack, Watch-Ausdrücke usw.
-
 
 ---
 
@@ -146,7 +140,6 @@ Use-Case: „Ich will kurz sehen, was in einer Funktion passiert.“
 
 4. Bei Bedarf `q` für Abbruch.
 
-
 ### 3.2 Ausführlich debuggen mit pudb
 
 Use-Case: „Ich will in Ruhe durch den Code laufen und Variablen im Blick haben.“
@@ -167,7 +160,6 @@ Use-Case: „Ich will in Ruhe durch den Code laufen und Variablen im Blick haben
 
 3. In der pudb-Oberfläche mit F-Tasten navigieren (F10/F11/F5).
 
-
 ---
 
 ## 4. Hinweise zu Installation und venv
@@ -181,7 +173,6 @@ pip freeze > requirements.txt
 ```
 
 So bleiben Projekte sauber voneinander getrennt und alles ist reproduzierbar.
-
 
 ---
 
