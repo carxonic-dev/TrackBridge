@@ -35,6 +35,7 @@ class TrackInfo:
     title: str
     primary_artist: str
     duration_ms: Optional[int] = None
+    source_url: Optional[str] = None # Optionales Feld für die Spotify-URL
 
 
 @dataclass
@@ -67,13 +68,27 @@ def get_connection() -> Generator[sqlite3.Connection, None, None]:
         conn.close()
 
 
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, col_def: str) -> None:
+    """
+    Stellt sicher, dass eine bestimmte Spalte in 'table' existiert.
+    Falls nicht, wird sie via ALTER TABLE hinzugefügt.
+    """
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table});")
+    cols = [row[1] for row in cur.fetchall()]
+    if column not in cols:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {col_def};")
+
+
 def init_db() -> None:
     """
-    Legt die benötigten Tabellen an, falls sie noch nicht existieren.
+    Legt die benötigten Tabellen an, falls sie noch nicht existieren
+    und führt einfache Schema-Migrationen (z. B. source_url) durch.
     """
     with get_connection() as conn:
         cur = conn.cursor()
 
+        # 1) Haupttabelle für Tracks
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS tracks (
@@ -86,11 +101,13 @@ def init_db() -> None:
                 last_seen_at     TEXT NOT NULL,
                 reencode_status  TEXT,
                 tagging_status   TEXT,
+                source_url       TEXT,
                 FOREIGN KEY (best_file_id) REFERENCES files(id)
             );
             """
         )
 
+        # 2) Tabelle für Dateien
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS files (
@@ -107,6 +124,9 @@ def init_db() -> None:
             );
             """
         )
+
+        # 3) Migration für ältere DBs: source_url-Spalte nachziehen (idempotent)
+        _ensure_column(conn, "tracks", "source_url", "TEXT")
 
 
 # Beim Import einmal sicherstellen, dass die DB-Struktur vorhanden ist
@@ -156,6 +176,7 @@ def upsert_track_basic(info: TrackInfo) -> None:
     - Erstellt den Track, falls nicht vorhanden.
     - Aktualisiert Titel/Artist/Duration, falls sich etwas geändert hat.
     - Aktualisiert immer das last_seen_at.
+    - source_url wird gesetzt, wenn eine neue URL mitgegeben wird.
     """
     now = datetime.utcnow().isoformat(timespec="seconds")
 
@@ -164,7 +185,7 @@ def upsert_track_basic(info: TrackInfo) -> None:
 
         cur.execute(
             """
-            SELECT title, primary_artist, duration_ms
+            SELECT title, primary_artist, duration_ms, source_url
             FROM tracks
             WHERE spotify_track_id = ?;
             """,
@@ -185,9 +206,10 @@ def upsert_track_basic(info: TrackInfo) -> None:
                     created_at,
                     last_seen_at,
                     reencode_status,
-                    tagging_status
+                    tagging_status,
+                    source_url
                 )
-                VALUES (?, ?, ?, ?, NULL, ?, ?, NULL, NULL);
+                VALUES (?, ?, ?, ?, NULL, ?, ?, NULL, NULL, ?);
                 """,
                 (
                     info.spotify_track_id,
@@ -196,6 +218,7 @@ def upsert_track_basic(info: TrackInfo) -> None:
                     info.duration_ms,
                     now,
                     now,
+                    info.source_url,
                 ),
             )
         else:
@@ -206,7 +229,8 @@ def upsert_track_basic(info: TrackInfo) -> None:
                 SET title = ?,
                     primary_artist = ?,
                     duration_ms = ?,
-                    last_seen_at = ?
+                    last_seen_at = ?,
+                    source_url = COALESCE(?, source_url)
                 WHERE spotify_track_id = ?;
                 """,
                 (
@@ -214,6 +238,7 @@ def upsert_track_basic(info: TrackInfo) -> None:
                     info.primary_artist,
                     info.duration_ms,
                     now,
+                    info.source_url,
                     info.spotify_track_id,
                 ),
             )
@@ -221,15 +246,20 @@ def upsert_track_basic(info: TrackInfo) -> None:
 
 def get_track(spotify_track_id: str) -> Optional[TrackInfo]:
     """
-    Holt Basisinformationen zu einem Track aus der Registry.
+    Lädt die Basisinformationen zu einem Track aus der Registry.
 
-    Gibt None zurück, wenn der Track nicht bekannt ist.
+    Gibt ein TrackInfo-Objekt zurück oder None, falls der Track
+    nicht in der Datenbank vorhanden ist.
     """
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT spotify_track_id, title, primary_artist, duration_ms
+            SELECT spotify_track_id,
+                   title,
+           primary_artist,
+                   duration_ms,
+                   source_url
             FROM tracks
             WHERE spotify_track_id = ?;
             """,
@@ -237,15 +267,16 @@ def get_track(spotify_track_id: str) -> Optional[TrackInfo]:
         )
         row = cur.fetchone()
 
-    if row is None:
-        return None
+        if row is None:
+            return None
 
-    return TrackInfo(
-        spotify_track_id=row[0],
-        title=row[1],
-        primary_artist=row[2],
-        duration_ms=row[3],
-    )
+        return TrackInfo(
+            spotify_track_id=row[0],
+            title=row[1],
+            primary_artist=row[2],
+            duration_ms=row[3],
+            source_url=row[4],
+        )
 
 
 # ---------------------------------------------------------------------------

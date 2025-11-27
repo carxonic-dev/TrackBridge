@@ -186,13 +186,13 @@ def _extract_tag_data(meta: Mapping[str, Any]) -> TrackTagData:
 
     # Kommentar - nur wenn wir wirklich Infos haben
     comment_parts: list[str] = []
-    if spotify_url:
-        comment_parts.append(f"Spotify: {spotify_url}")
+    # Spotify-URL kommt NICHT mehr in die Datei, nur in die Registry
     if bpm is not None:
         comment_parts.append(f"BPM: {bpm:g}")
     if musical_key:
         comment_parts.append(f"Key: {musical_key}")
     comment = " | ".join(comment_parts) if comment_parts else None
+
 
     # Cover-Bytes sind aktuell noch nicht aus der JSON befüllt - Platzhalter
     cover_bytes: Optional[bytes] = None

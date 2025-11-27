@@ -11,6 +11,7 @@
   "DownloadMaxRetries": 2,
 
   "RegistryEnabled": true,
+  "RegistryStoreSpotifyUrl": true,
   "SkipExistingFiles": true,
   "KnownAudioExtensions": [
     "m4a", "aac", "mp3", "flac", "alac",

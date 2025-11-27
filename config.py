@@ -74,7 +74,7 @@ ALLOW_REENCODE_FOR_INCOMPATIBLE: bool = bool(
 )
 
 REGISTRY_ENABLED: bool = bool(CONFIG.get("RegistryEnabled", False))
-
+REGISTRY_STORE_SPOTIFY_URL: bool = bool(CONFIG.get("RegistryStoreSpotifyUrl", True))
 
 
 # --- .env laden --------------------------------------------------------------

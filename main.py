@@ -60,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="command",
         metavar=(
             "{sanity-check,export,export-ytdlp,"
-            "plan-downloads,run-downloads,analyze-playlist}"
+            "plan-downloads,run-downloads,tag-playlist,analyze-playlist}"
         ),
     )
 
@@ -203,6 +203,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional: maximale Anzahl tatsächlicher Downloads (Standard: alle).",
     )
     run_parser.set_defaults(func=handle_run_downloads)
+
+    # ------------------------------------------------------------------
+    # tag-playlist
+    # ------------------------------------------------------------------
+    tag_parser = subparsers.add_parser(
+        "tag-playlist",
+        help=(
+            "Wendet Tagging (und optional Registry-Update) auf bereits "
+            "heruntergeladene Dateien einer Playlist an."
+        ),
+    )
+
+    tag_parser.add_argument(
+        "--playlist-id",
+        required=True,
+        help="Spotify-Playlist-ID (wie beim Export).",
+    )
+    tag_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Optional: Anzahl der zu verarbeitenden Tracks begrenzen.",
+    )
+    tag_parser.add_argument(
+        "--no-registry",
+        action="store_true",
+        help="Registry-Update für diesen Lauf deaktivieren.",
+    )
+
+    tag_parser.set_defaults(func=handle_tag_playlist)
+
 
     # ------------------------------------------------------------------
     # analyze-playlist
@@ -348,6 +379,24 @@ def handle_analyze_playlist(args: argparse.Namespace) -> None:
     """
     playlist_id: str = args.playlist_id
     analyze_playlist_folder(playlist_id)
+
+
+def handle_tag_playlist(args: argparse.Namespace) -> None:
+    """
+    CLI-Handler für den Befehl 'tag-playlist'.
+
+    Nutzt die Extended-JSON und die bereits vorhandenen Audiodateien,
+    um Tagging und optional die Registry zu aktualisieren.
+    """
+    from yt_dlp_runner import retag_downloads_for_playlist
+
+    update_registry = not getattr(args, "no_registry", False)
+
+    retag_downloads_for_playlist(
+        playlist_id=args.playlist_id,
+        limit=args.limit,
+        update_registry=update_registry,
+    )
 
 
 def main() -> None:

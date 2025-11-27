@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 from queue import Queue, Empty
 from tagging import apply_tags_to_file
+from track_registry import TrackInfo, register_file_for_track
 
 from config import (
     OUTPUT_DIRECTORY,
@@ -15,6 +16,10 @@ from config import (
     KNOWN_AUDIO_EXTENSIONS,
     DJ_COMPATIBILITY_PROFILE,
     DJ_WARN_ON_INCOMPATIBLE,
+    REGISTRY_ENABLED,
+    REGISTRY_STORE_SPOTIFY_URL,  # NEU
+    # ALLOW_REENCODE_FOR_INCOMPATIBLE,
+    # PREFERRED_HIGH_QUALITY_TARGET,
 )
 
 from format_profiles import is_ext_compatible_with_active_profile
@@ -363,8 +368,10 @@ def _run_single_job(job: DownloadJob) -> bool:
                 )
 
             # 2) Optionaler HQ-Reencode für inkompatible Formate
+            active_path = downloaded
             new_path = reencode_if_needed(downloaded)
             if new_path is not None:
+                active_path = new_path
                 print(
                     f"[RUN] Aktive HQ-Datei für diesen Track: {new_path.name}"
                 )
@@ -372,13 +379,39 @@ def _run_single_job(job: DownloadJob) -> bool:
             # 3) Tagging-Hook: Metadaten aus Extended-JSON anwenden
             if job.track_meta is not None:
                 try:
-                    apply_tags_to_file(downloaded, job.track_meta)
-                    print(f"[TAG] Tags angewendet: {downloaded.name}")
+                    apply_tags_to_file(active_path, job.track_meta)
+                    print(f"[TAG] Tags angewendet: {active_path.name}")
                 except Exception as exc:  # noqa: BLE001
                     print(
                         f"[TAG-ERROR] Tagging fehlgeschlagen für "
-                        f"{downloaded.name}: {exc}"
+                        f"{active_path.name}: {exc}"
                     )
+
+            # 4) Registry-Hook: Datei in der Track-Registry erfassen (optional)
+            if REGISTRY_ENABLED and job.spotify_track_id and active_path.exists():
+                try:
+                    meta = job.track_meta or {}
+                    duration_ms = meta.get("duration_ms")
+
+                    source_url = None
+                    if REGISTRY_STORE_SPOTIFY_URL:
+                        source_url = job.spotify_url
+
+                    track_info = TrackInfo(
+                        spotify_track_id=job.spotify_track_id,
+                        title=job.title,
+                        primary_artist=job.primary_artist,
+                        duration_ms=duration_ms,
+                        source_url=source_url,
+                    )
+                    register_file_for_track(track_info, active_path)
+                    print(f"[REG] Datei registriert: {active_path}")
+                except Exception as exc:  # noqa: BLE001
+                    print(
+                        f"[REG-ERROR] Registrierung fehlgeschlagen für "
+                        f"{active_path}: {exc}"
+                    )
+
 
         return True
 
@@ -541,4 +574,97 @@ def _print_summary(
                     f"- #{job.track_index + 1:02d} | "
                     f"{job.primary_artist} - {job.title}"
                 )
+
+
+def retag_downloads_for_playlist(
+    playlist_id: str,
+    limit: int | None = None,
+    update_registry: bool = True,
+) -> None:
+    """
+    Wendet das Tagging (und optional Registry-Update) auf bereits
+    heruntergeladene Dateien einer Playlist an.
+
+    Voraussetzung:
+    - Extended-JSON der Playlist existiert (export wurde bereits ausgeführt)
+    - Die Audiodateien liegen im erwarteten Zielordner
+    """
+
+    data = load_playlist_data(playlist_id)
+    jobs = build_jobs_from_playlist_data(playlist_id, data)
+
+    if limit is not None and limit >= 0:
+        jobs = jobs[:limit]
+
+    if not jobs:
+        print(f"[TAG-PLAYLIST] Keine Tracks für Playlist {playlist_id} gefunden.")
+        return
+
+    print(
+        f"[TAG-PLAYLIST] Starte Tagging für Playlist {playlist_id} "
+        f"({len(jobs)} Track(s))"
+    )
+    print(
+        f"[TAG-PLAYLIST] Registry-Update: "
+        f"{'aktiv' if (REGISTRY_ENABLED and update_registry) else 'deaktiviert'}"
+    )
+    print()
+
+    tagged = 0
+    skipped = 0
+    failed = 0
+
+    for job in jobs:
+        audio_path = _find_downloaded_file(job)
+        if audio_path is None:
+            print(
+                f"[TAG-SKIP] Keine Datei gefunden für "
+                f"#{job.track_index + 1:02d}: "
+                f"{job.primary_artist} - {job.title}"
+            )
+            skipped += 1
+            continue
+
+        # 1) Tagging anwenden
+        meta = job.track_meta or {}
+        try:
+            apply_tags_to_file(audio_path, meta)
+            print(f"[TAG] Tags angewendet: {audio_path.name}")
+            tagged += 1
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"[TAG-ERROR] Tagging fehlgeschlagen für "
+                f"{audio_path.name}: {exc}"
+            )
+            failed += 1
+            continue
+
+        # 2) Optional Registry-Update
+        if REGISTRY_ENABLED and update_registry and job.spotify_track_id:
+            try:
+                duration_ms = meta.get("duration_ms")
+                source_url = job.spotify_url if REGISTRY_STORE_SPOTIFY_URL else None
+
+                track_info = TrackInfo(
+                    spotify_track_id=job.spotify_track_id,
+                    title=job.title,
+                    primary_artist=job.primary_artist,
+                    duration_ms=duration_ms,
+                    source_url=source_url,
+                )
+                register_file_for_track(track_info, audio_path)
+                print(f"[REG] Datei registriert (Tag-Run): {audio_path}")
+            except Exception as exc:  # noqa: BLE001
+                print(
+                    f"[REG-ERROR] Registrierung (Tag-Run) fehlgeschlagen "
+                    f"für {audio_path}: {exc}"
+                )
+
+    print()
+    print("====== TAG-PLAYLIST-SUMMARY ======")
+    print(f"Getaggte Dateien:        {tagged}")
+    print(f"Übersprungen (fehlt):    {skipped}")
+    print(f"Fehler beim Tagging:     {failed}")
+    print("==================================")
+
 # Ende yt_dlp_runner.py
