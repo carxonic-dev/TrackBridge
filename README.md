@@ -1,133 +1,99 @@
-# spotify_2_yt-dlp
+# TrackBridge – Playlist2Audio Engine
 
-Ein leistungsstarkes, professionelles CLI‑Tool zum **Exportieren**, **Analysieren**, **Herunterladen**, **Taggen** und **Verwalten** von Spotify‑Playlists – optimiert für **DJs**, **Content‑Creator**, **Archivare** und **Automations-Freaks**. Entwickelt für Stabilität, Präzision und saubere Audio‑Workflows.
+*(vollständig überarbeitet und GitHub-ready)*
 
-Unterstützt:
-- Spotify → Extended‑JSON Export
-- yt‑dlp Download mit Format-Priorisierung
-- Mutagen‑Tagging (ID3 / MP4)
-- SQLite‑Registry für Datei‑Tracking
-- Nachträgliches Tagging (Retag-Pipeline)
-- Analyse von Playlists im Dateisystem
+TrackBridge ist ein leistungsstarkes, professionelles CLI‑Tool zum Exportieren, Analysieren, Herunterladen, Taggen und Verwalten von Spotify‑Playlisten – optimiert für DJs, Content‑Creator, Archivare, KI‑Automations‑Workflows und alle, die saubere Audio‑Libraries lieben.
 
-Der Fokus liegt auf **Robustheit**, **Automatisierung** und **sauberen Metadaten**, ohne Experimente im Audiotagging.
+Der Kern von TrackBridge:
+**Spotify‑Playlist rein → DJ‑taugliche, sauber getaggte Audiodateien raus.**
 
 ---
 
 ## 🚀 Features
 
-### 🎧 Playlist-Export
-- Exportiert öffentliche Spotify-Playlists als **Extended‑JSON**.
-- Optionaler Export einer **yt-dlp Suchliste** (für manuelle Workflows).
-- Enthält alle notwendigen Informationen für Download, Tagging & Registry.
+### 🎧 Playlist‑Export
 
-### ⬇️ Download-Pipeline (run-downloads)
-- yt‑dlp Integration mit Format-Priorisierung:
-  - `m4a` → `aac` → `mp3` → `flac` → `alac`
-- Parallele Worker + Retry-Logik
-- Automatische Dateibenennung nach Track-Index
-- Speicherort pro Playlist (saubere Ordnerstruktur)
+* Exportiert Spotify‑Playlisten als Extended‑JSON.
+* Optionaler Export einer yt‑dlp Suchliste.
+* Enthält alle Metadaten für Download, Tagging & Registry.
+
+### ⬇️ Download‑Pipeline
+
+* Automatischer Download‑Plan.
+* yt‑dlp Integration mit Format‑Priorisierung.
+* Parallele Worker + Retry‑Mechanik.
+* Saubere Ordnerstruktur pro Playlist.
 
 ### 🏷 Präzises Tagging
-- Mutagen-basierte Engine, setzt zuverlässig:
-  - Titel
-  - Artist / Album Artist
-  - Album
-  - Track-Index
-  - BPM (falls in JSON)
-  - Key (falls in JSON)
-- Kommentar enthält **keine URLs**, nur technische Werte (BPM/Key).
-- DJ-kompatible Werte für Rekordbox, Engine DJ, Serato, Traktor.
 
-### 📚 SQLite-Registry (optional)
-- Aktivierbar über `config.json`.
-- Speichert:
-  - Spotify-Track-ID
-  - Titel, Artist, Dauer
-  - Optional: **Spotify-URL** (sauber, nicht im Audio-Tag)
-  - Verknüpfte Files + Dateimetadaten
-- Praktisch für spätere Erweiterungen:
-  - Duplicate-Check
-  - Reencode-Historie
-  - Datei-Management
+* Mutagen‑Engine (MP3, M4A/MP4, AIFF).
+* Setzt: Titel, Artist, Album, Tracknummer, BPM, Key.
+* Covers möglich.
+* DJ‑kompatibel (Rekordbox, Serato, Traktor, Engine DJ).
 
-### 🔁 Retag-Pipeline (tag-playlist)
-- Wendet das Tagging **nachträglich** auf vorhandene Dateien an.
-- Ideal nach Änderungen im Tagging-Algorithmus.
-- Optional: Registry erneut aktualisieren.
-- Zero-Risk für bestehende Files, da kein Download nötig.
+### 📚 SQLite‑Registry (optional)
 
-### 🔍 Playlist-Analyser
-- Prüft lokale Playlist-Ordner auf:
-  - Formate & Codecs
-  - DJ-Kompatibilität
-  - fehlende oder doppelte Dateien
+* Speichert Track‑ID, Künstler, Pfad, Größe, Hash, Timestamp.
+* Optional Speicherung der Spotify‑URL (nur DB, nie Audiofile).
+
+### 🔁 Retag‑Pipeline
+
+* Nachträgliches Tagging vorhandener Dateien.
+* Keine Downloads nötig.
+
+### 🔍 Playlist‑Analyse
+
+* Format‑Check, DJ‑Kompatibilität, Duplicate‑Scan.
+
+---
+
+## 🧬 Architektur & Module
+
+```
+main.py               → CLI / Subcommands
+spotify_client.py     → API Zugriff
+playlist_exporter.py  → JSON Export
+yt_dlp_runner.py      → Downloads & Worker
+tagging.py            → Mutagen Tagging
+track_registry.py     → SQLite Registry
+format_profiles.py    → DJ‑Profile
+config.py             → Config / Validation
+collection_analyzer.py→ Analyse‑Tools
+```
 
 ---
 
 ## 📦 Installation
 
-### Spotify Developer Key einrichten
-Damit das Tool funktionieren kann, benötigst du eine **Spotify Client ID** und ein **Client Secret**.
+### Spotify Developer App einrichten
 
-Du kannst diese Daten auf zwei Wegen hinterlegen:
+1. [https://developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+2. App erstellen
+3. Redirect‑URL: [http://localhost/](http://localhost/)
+4. Client‑ID & Secret kopieren
+5. In `.env` oder `config.json` eintragen
 
----
-### **Option A – `.env` verwenden (empfohlen für Entwickler)**
-Lege im Projektordner eine Datei `.env` an und trage ein:
+### Option A – `.env`
+
 ```
 SpotifyClientId=DEINE-ID
 SpotifyClientSecret=DEIN-SECRET
 ```
-Diese Variante ist ideal für lokale Entwicklung, da keine sensiblen Daten in der `config.json` landen.
 
----
-### **Option B – Daten in `config.json` hinterlegen (empfohlen für Endnutzer / Deployment)**
-Füge folgendes in deine `config.json` ein:
+### Option B – `config.json`
+
 ```json
-"SpotifyClientId": "DEINE-ID",
-"SpotifyClientSecret": "DEIN-SECRET"
-```
-Die Werte werden automatisch über `config.py` geladen:
-```python
-SPOTIFY_CLIENT_ID = CONFIG.get("SpotifyClientId", "")
-SPOTIFY_CLIENT_SECRET = CONFIG.get("SpotifyClientSecret", "")
+{
+  "SpotifyClientId": "<ID>",
+  "SpotifyClientSecret": "<SECRET>"
+}
 ```
 
----
-### Spotify Developer App anlegen
+### TrackBridge installieren
 
-**Schritt 1 – Spotify Developer Dashboard öffnen**
-https://developer.spotify.com/dashboard
-
-**Schritt 2 – Login**
-Mit deinem Spotify-Account einloggen.
-
-**Schritt 3 – Neue App anlegen**
-"Create App" → beliebiger Name, z. B. *spotify_2_yt-dlp*.
-
-**Schritt 4 – Redirect-URL setzen**
-Für dieses Tool ausreichend:
 ```
-http://localhost/
-```
-
-**Schritt 5 – Client ID & Secret kopieren**
-
-**Schritt 6 – In `.env` oder `config.json` hinterlegen**
-
----
-### Funktionstest
-```bash
-python main.py sanity-check
-```
-Wenn alles korrekt gesetzt wurde, bestätigt der Sanity‑Check die erfolgreiche Authentifizierung.
-
-Installation
-
-```bash
-git clone https://github.com/<dein-user>/spotify_2_yt-dlp.git
-cd spotify_2_yt-dlp
+git clone https://github.com/carxonic-dev/TrackBridge.git
+cd TrackBridge
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -135,12 +101,10 @@ pip install -r requirements.txt
 
 ---
 
-## ⚙️ Konfiguration (`config.json`)
+## ⚙ Konfiguration (config.json)
 
 ```json
 {
-  "SpotifyClientId": "<id>",
-  "SpotifyClientSecret": "<secret>",
   "OutputDirectory": "D:/Projekte/20_DATA/Playlist_export_spotify",
   "MaxParallelDownloads": 2,
   "DownloadMaxRetries": 2,
@@ -153,103 +117,91 @@ pip install -r requirements.txt
 }
 ```
 
-Wichtig:
-- **RegistryStoreSpotifyUrl** bestimmt, ob die Spotify-URL in die Registry geschrieben wird.
-- Die URL wird **nie** ins Audiofile geschrieben, nur in die DB.
-
 ---
 
-## 🧰 CLI-Kommandos
+## 🧰 CLI‑Kommandos
 
-### 🔧 sanity-check
-```bash
+### sanity‑check
+
+```
 python main.py sanity-check
 ```
-Prüft Spotify-API & Grundkonfiguration.
 
-### 📤 export
-```bash
+### export
+
+```
 python main.py export --playlist-id <ID>
 ```
-Exportiert Playlist als Extended‑JSON.
 
-### 🧾 export-ytdlp
-```bash
+### export‑ytdlp
+
+```
 python main.py export-ytdlp --playlist-id <ID>
 ```
-Erzeugt reine Suchliste für yt‑dlp.
 
-### 🗂 plan-downloads
-```bash
+### plan‑downloads
+
+```
 python main.py plan-downloads --playlist-id <ID>
 ```
-Dry‑Run ohne echte Downloads.
 
-### ⬇️ run-downloads
-```bash
+### run‑downloads
+
+```
 python main.py run-downloads --playlist-id <ID> --limit 20
 ```
-Kompletter Download-/Tagging-/Registry-Workflow.
 
-### 🏷 tag-playlist
-```bash
-python main.py tag-playlist --playlist-id <ID> --limit 10
+### tag‑playlist
+
 ```
-- Taggt bereits vorhandene Dateien nach.
-- Optional: `--no-registry`
+python main.py tag-playlist --playlist-id <ID>
+```
 
-### 🔍 analyze-playlist
-```bash
+### analyze‑playlist
+
+```
 python main.py analyze-playlist --playlist-id <ID>
 ```
-Analysiert lokalen Playlist-Ordner.
 
 ---
 
 ## 🧪 Typischer Workflow
 
-1. **Sanity-Check**
-```bash
+```
 python main.py sanity-check
-```
-
-2. **Export**
-```bash
 python main.py export --playlist-id <ID>
-```
-
-3. **Downloads starten**
-```bash
 python main.py run-downloads --playlist-id <ID>
-```
-
-4. **Nachträgliches Tagging (optional)**
-```bash
 python main.py tag-playlist --playlist-id <ID>
 ```
 
 ---
 
-## ☕ Buy Me a Coffee
-Wenn dir das Projekt gefällt oder du meinen weiteren Open‑Source‑Kram unterstützen möchtest:
+## 🤖 Zukunft & MusicVault‑Integration
 
-👉 **https://www.buymeacoffee.com/<deinname>**
+TrackBridge wird langfristig eng mit **MusicVault** verzahnt:
 
-Jede Unterstützung hilft, öfter Updates & neue Features zu liefern. 🙌
+* automatische Library‑Übernahme
+* Duplicate‑Erkennung
+* GUI / Web‑UI
+* Multi‑User Profile
+* Reencode‑Engine
+
+---
+
+## ☕ Support
+
+Wenn dir TrackBridge oder eines meiner anderen Open-Source-Projekte weiterhilft, kannst du meine Arbeit hier unterstützen:
+
+[![Buy Me A Coffee](https://img.buymeacoffee.com/button-api/?text=Support%20me&emoji=☕&slug=carxonicdev&button_colour=0d1117&font_colour=ffffff&font_family=Inter&outline_colour=8A2BE2&coffee_colour=FF0F87)](https://buymeacoffee.com/carxonicdev)
 
 ---
 
 ## 📄 Lizenz
-MIT License – frei für private & kommerzielle Nutzung.
+
+MIT License – freie Nutzung für private & kommerzielle Projekte.
 
 ---
 
 ## ❤️ Credits
-Projektarchitektur, Tagging-Engine und Workflow-Design mit besonderem Fokus auf:
-- DJ‑Kompatibilität
-- saubere Metadaten
-- reproduzierbare Abläufe
-- Erweiterbarkeit (Web‑Frontend, GUI, Plugins)
 
-Dieses Projekt wurde u. a. durch Pair‑Programming mit einer KI verbessert – aber alle wichtigen Entscheidungen bleiben menschlich. 😉
-
+Developed by **carxonic-dev**, mit Fokus auf DJ‑Kompatibilität, saubere Metadaten, stabile Workflows & moderne Python‑Architektur.
