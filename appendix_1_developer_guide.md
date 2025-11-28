@@ -7,32 +7,37 @@ Ziel: Eine **saubere, modulare, nachvollziehbare Architektur**, die langfristig 
 ---
 
 # 📚 Inhaltsverzeichnis
-- [Einleitung](#einleitung)
-- [Projektarchitektur](#projektarchitektur)
-- [Modulübersicht](#modulübersicht)
-- [Registry-Design (SQLite)](#registry-design-sqlite)
-- [Tagging-Engine](#tagging-engine)
-- [yt-dlp Runner & Worker-Architektur](#yt-dlp-runner--worker-architektur)
-- [CLI-Architektur](#cli-architektur)
-- [Format-Profile / DJ-Kompatibilität](#format-profile--dj-kompatibilität)
-- [API-Hooks für GUI-Entwickler](#api-hooks-für-gui-entwickler)
-- [Unit-Tests & Debugging](#unit-tests--debugging)
-- [Roadmap & Erweiterungsmöglichkeiten](#roadmap--erweiterungsmöglichkeiten)
+
+* [Einleitung](#einleitung)
+* [Projektarchitektur](#projektarchitektur)
+* [Modulübersicht](#modulübersicht)
+* [Registry-Design (SQLite)](#registry-design-sqlite)
+* [Tagging-Engine](#tagging-engine)
+* [yt-dlp Runner & Worker-Architektur](#yt-dlp-runner--worker-architektur)
+* [CLI-Architektur](#cli-architektur)
+* [Format-Profile / DJ-Kompatibilität](#format-profile--dj-kompatibilität)
+* [API-Hooks für GUI-Entwickler](#api-hooks-für-gui-entwickler)
+* [Unit-Tests & Debugging](#unit-tests--debugging)
+* [Roadmap & Erweiterungsmöglichkeiten](#roadmap--erweiterungsmöglichkeiten)
 
 ---
 
 # Einleitung
+
 spotify_2_yt-dlp ist modular aufgebaut, um:
-- saubere Trennung zwischen **CLI**, **Business-Logic**, **Tagging**, **Registry** und **Download-Pipeline** sicherzustellen,
-- Erweiterungen ohne technische Brüche zu ermöglichen,
-- eine spätere GUI (Desktop oder Web) direkt andocken zu lassen.
+
+* saubere Trennung zwischen **CLI**, **Business-Logic**, **Tagging**, **Registry** und **Download-Pipeline** sicherzustellen,
+* Erweiterungen ohne technische Brüche zu ermöglichen,
+* eine spätere GUI (Desktop oder Web) direkt andocken zu lassen.
 
 Dieses Dokument beschreibt die komplette technische Struktur.
 
 ---
 
 # Projektarchitektur
+
 Grundverzeichnis:
+
 ```
 spotify_2_yt-dlp/
  ┣ main.py                # CLI Entry
@@ -53,64 +58,82 @@ Mehrere Module sind bewusst „low-coupled“, damit spätere Erweiterungen wie 
 ---
 
 # Modulübersicht
+
 ## `config.py`
+
 Zentrale Konfiguration. Lädt:
-- `.env`
-- `config.json`
-- Standardwerte
+
+* `.env`
+* `config.json`
+* Standardwerte
 
 Alle Flags (z. B. RegistryEnabled, RegistryStoreSpotifyUrl) werden hier gesetzt.
 
 ## `spotify_client.py`
+
 Kommuniziert mit:
-- Token-Endpoint (`SPOTIFY_TOKEN_URL`)
-- Playlist-API
-- Track-Metadaten
+
+* Token-Endpoint (`SPOTIFY_TOKEN_URL`)
+* Playlist-API
+* Track-Metadaten
 
 ## `playlist_exporter.py`
+
 Ziel: Extended-JSON erzeugen mit:
-- Titel, Artist, Dauer
-- BPM/Key (falls API erlaubt)
-- Vollständige Track-Objects
+
+* Titel, Artist, Dauer
+* BPM/Key (falls API erlaubt)
+* Vollständige Track-Objects
 
 ## `yt_dlp_runner.py`
+
 Download-Engine:
-- Worker-System (Threads)
-- Retry-Logik
-- Format-Priorisierung
-- Mapping audio -> Mutagen-Tagging
-- Registry-Integration
+
+* Worker-System (Threads)
+* Retry-Logik
+* Format-Priorisierung
+* Mapping audio -> Mutagen-Tagging
+* Registry-Integration
 
 ## `tagging.py`
-- Setzt Metadaten
-- Einheitlich für alle Formate
-- Zero-URL-Policy
+
+* Setzt Metadaten
+* Einheitlich für alle Formate
+* Zero-URL-Policy
 
 ## `track_registry.py`
+
 Dedicated SQLite-Layer:
-- Tabellen `tracks` und `files`
-- Migrationen
-- Upsert-Funktionen
-- Registry-Debug-Funktion
+
+* Tabellen `tracks` und `files`
+* Migrationen
+* Upsert-Funktionen
+* Registry-Debug-Funktion
 
 ## `format_profiles.py`
+
 DJ-Kompatibilitätslayer:
-- CDJ-Profil als Standard
-- Erweiterbar (Denon, XDJ, Traktor)
-- Geeignet für Format-Warnungen in analyze-playlist
+
+* CDJ-Profil als Standard
+* Erweiterbar (Denon, XDJ, Traktor)
+* Geeignet für Format-Warnungen in analyze-playlist
 
 ---
 
 # Registry-Design (SQLite)
+
 ## Ziele
-- Wiedererkennbarkeit von Downloads
-- Verknüpfung: Track-ID → Datei
-- Grundlage für Duplicate Checks
-- Grundlage für Reencode Checks
-- Optionale Speicherung der Spotify-URL
+
+* Wiedererkennbarkeit von Downloads
+* Verknüpfung: Track-ID → Datei
+* Grundlage für Duplicate Checks
+* Grundlage für Reencode Checks
+* Optionale Speicherung der Spotify-URL
 
 ## Tabellenstruktur
+
 ### `tracks`
+
 ```
 spotify_track_id TEXT PRIMARY KEY
 source_url TEXT NULL
@@ -122,6 +145,7 @@ best_file_id TEXT NULL
 ```
 
 ### `files`
+
 ```
 track_id TEXT           # FK zu tracks.spotify_track_id
 absolute_path TEXT
@@ -131,43 +155,52 @@ PRIMARY KEY(track_id, absolute_path)
 ```
 
 ## Migrationslogik
+
 Beim Start von `track_registry.py`:
-- Tabellen werden erstellt, falls nicht vorhanden.
-- Neue Spalten werden automatisch erzeugt (`ALTER TABLE`), falls fehlen.
+
+* Tabellen werden erstellt, falls nicht vorhanden.
+* Neue Spalten werden automatisch erzeugt (`ALTER TABLE`), falls fehlen.
 
 Damit ist die Registry upgrade-fähig ohne Nutzereingriffe.
 
 ---
 
 # Tagging-Engine
+
 Mutagen-basiert. Einheitliches Interface:
+
 ```
 apply_tags_to_file(path, metadata_dict)
 ```
 
 ### Setzt:
-- Titel
-- Artist(s)
-- Album
-- Tracknummer
-- BPM (optional)
-- Key (optional)
+
+* Titel
+* Artist(s)
+* Album
+* Tracknummer
+* BPM (optional)
+* Key (optional)
 
 ### Setzt NICHT:
-- Kommentar-URLs
-- Cover Art (Feature für zukünftige Versionen)
+
+* Kommentar-URLs
+* Cover Art (Feature für zukünftige Versionen)
 
 Design-Ziel:
-- Keine DJ-Software wird verwirrt
-- Maximale Kompatibilität
-- Keine "exotischen" Frames
+
+* Keine DJ-Software wird verwirrt
+* Maximale Kompatibilität
+* Keine "exotischen" Frames
 
 ---
 
 # yt-dlp Runner & Worker-Architektur
+
 Download-Pipeline:
 
 ## Ablauf:
+
 1. Extended-JSON laden
 2. Download-Jobs erzeugen
 3. Worker starten
@@ -176,46 +209,54 @@ Download-Pipeline:
 6. Registry updaten
 
 ## Worker-Modell
+
 Threaded Worker W1, W2, …
 
 Jeder Worker:
-- zieht Job aus Queue
-- führt Download aus
-- versucht bis `DownloadMaxRetries`
-- ruft Tagging + Registry auf
+
+* zieht Job aus Queue
+* führt Download aus
+* versucht bis `DownloadMaxRetries`
+* ruft Tagging + Registry auf
 
 Fehler führen nicht zum Abbruch des Gesamtlaufs.
 
 ---
 
 # CLI-Architektur
+
 Alle CLI-Befehle definieren ihren eigenen Subparser:
+
 ```
 subparsers = parser.add_subparsers(dest="command")
 ```
 
 Jeder Befehl setzt:
+
 ```
 parser.set_defaults(func=handler)
 ```
 
 ### Wichtige CLI-Handler:
-- `handle_sanity_check`
-- `handle_export_playlist`
-- `handle_export_ytdlp`
-- `handle_plan_downloads`
-- `handle_run_downloads`
-- `handle_analyze_playlist`
-- `handle_tag_playlist`
-- `handle_debug_registry`
+
+* `handle_sanity_check`
+* `handle_export_playlist`
+* `handle_export_ytdlp`
+* `handle_plan_downloads`
+* `handle_run_downloads`
+* `handle_analyze_playlist`
+* `handle_tag_playlist`
+* `handle_debug_registry`
 
 CLI bleibt bewusst schlank.
 
 ---
 
 # Format-Profile / DJ-Kompatibilität
+
 Profiles definiert in `format_profiles.py`.
 Beispielstruktur:
+
 ```
 {
   "cdj_default": {
@@ -231,16 +272,18 @@ Beispielstruktur:
 ```
 
 Weitere Profile möglich:
-- XDJ-XZ / XDJ-RX3
-- Denon Prime
-- Traktor 4
-- Serato Player (Laptop)
+
+* XDJ-XZ / XDJ-RX3
+* Denon Prime
+* Traktor 4
+* Serato Player (Laptop)
 
 Die CLI-Analyse (`analyze-playlist`) kann entsprechende Warnungen ausgeben.
 
 ---
 
 # API-Hooks für GUI-Entwickler
+
 GUI sollte ausschließlich die **öffentlichen API-Funktionen** nutzen, z. B.:
 
 ```
@@ -251,51 +294,131 @@ analyze_playlist_path()
 ```
 
 Design-Hinweis:
-- GUI ruft intern Python-Funktionen auf
-- NICHT direkt Dateien/Registry anfassen
-- Logging-Ausgaben können im GUI-Logfenster dargestellt werden
+
+* GUI ruft intern Python-Funktionen auf
+* NICHT direkt Dateien/Registry anfassen
+* Logging-Ausgaben können im GUI-Logfenster dargestellt werden
 
 Mögliche GUI-Technologien:
-- Tkinter
-- PySide6 / Qt
-- PyWebview
-- Electron + Python Backend
-- Streamlit (Web-GUI)
+
+* Tkinter
+* PySide6 / Qt
+* PyWebview
+* Electron + Python Backend
+* Streamlit (Web-GUI)
 
 ---
 
 # Unit-Tests & Debugging
+
 ## Unit-Test-Empfehlungen
-- Tagging-Tests (mit temporären Dateien)
-- Registry-Tests (in temporärer SQLite-DB)
-- Export-Tests (Mock-Spotify)
-- Downloader-Tests (Mock yt-dlp)
+
+* Tagging-Tests (mit temporären Dateien)
+* Registry-Tests (in temporärer SQLite-DB)
+* Export-Tests (Mock-Spotify)
+* Downloader-Tests (Mock yt-dlp)
 
 ## Debugging Tools
-- `debug-registry` (integriert)
-- SQL-Viewer (SQLite Browser)
-- Logging aus `yt_dlp_runner`
-- Testplaylist mit 1–2 Tracks
+
+* `debug-registry` (integriert)
+* SQL-Viewer (SQLite Browser)
+* Logging aus `yt_dlp_runner`
+* Testplaylist mit 1–2 Tracks
 
 ---
 
 # Roadmap & Erweiterungsmöglichkeiten
+
 ## Kurzfristig
-- Format-Profile erweitern
-- Registry-Deduplizierung
-- Test-Suite hinzufügen
+
+* Format-Profile erweitern
+* Registry-Deduplizierung
+* Test-Suite hinzufügen
 
 ## Mittelfristig
-- GUI bauen (Desktop/Web)
-- Auto-Reencode für inkompatible Player
-- BPM/Key-Metadaten aus alternativen Quellen
+
+* GUI bauen (Desktop/Web)
+* Auto-Reencode für inkompatible Player
+* BPM/Key-Metadaten aus alternativen Quellen
 
 ## Langfristig
-- Webservice / API
-- Multi-User Playlisten-Verwaltung
-- Cloud-Sync / Remote-Downloader
+
+* Webservice / API
+* Multi-User Playlisten-Verwaltung
+* Cloud-Sync / Remote-Downloader
 
 ---
 
 > Dieses Dokument dient als technische Grundlage für alle Entwickler, Contributor und GUI-Entwickler, die auf dem Projekt aufbauen möchten.
 
+## Warum TrackBridge immer eine JSON-Datei erzeugt – auch wenn die Registry aktiv ist
+
+Die JSON-Datei bleibt ein zentraler Bestandteil des Workflows, selbst wenn die SQLite‑Registry aktiviert ist. Registry und JSON erfüllen unterschiedliche Rollen, die sich ergänzen – nicht ersetzen.
+
+### 1. JSON = vollständiger Playlist‑Snapshot
+
+Die Extended‑JSON enthält **alle** Playlist‑Informationen:
+
+* Tracknummern und Reihenfolge (Sortierung)
+* Titel, Artists, Album
+* BPM / Key (falls verfügbar)
+* Dauer
+* Playlist‑Kontext
+* Exportzeitpunkt als Snapshot
+
+Sie dient als **Masterplan** für alle nachgelagerten Prozesse:
+
+* Download‑Planung
+* yt‑dlp‑Queries
+* Tagging‑Pipeline
+* Retagging
+
+Ohne JSON gäbe es keine reproduzierbare Grundlage für all diese Schritte.
+
+### 2. Registry = Inventar, nicht Playlist
+
+Die SQLite‑Registry speichert ausschließlich:
+
+* Spotify‑Track‑ID
+* optionale Spotify‑URL
+* zugeordnete Dateien (absolute Pfade)
+* Formate / fehlende Dateien / Reencode‑Status
+
+Sie ist ein **Datei‑Inventar**, unabhängig von einzelnen Playlists.
+Sie ersetzt keine Playlist-Struktur.
+
+### 3. JSON wird für Downloads und Tagging weiterhin benötigt
+
+Alle operativen Workflows nutzen die JSON:
+
+* `run-downloads` verwendet die Track‑Reihenfolge aus der JSON
+* `plan-downloads` nutzt die JSON zur Simulation
+* `tag-playlist` liest BPM/Key/Titel/Artist aus der JSON
+
+Würde man ausschließlich die Registry nutzen, gingen folgende Informationen verloren:
+
+* Tracknummern
+* Playlist-Kontext
+* Vollständige Metadaten
+
+### 4. JSON = Transparenz & Debugbarkeit
+
+Mit JSON lassen sich jederzeit:
+
+* Playlists vergleichen
+* Exporte archivieren
+* Änderungen nachvollziehen
+
+Registry allein wäre dafür völlig ungeeignet.
+
+### 5. JSON und Registry erfüllen unterschiedliche Zwecke
+
+| Komponente   | Zweck                                                            |
+| ------------ | ---------------------------------------------------------------- |
+| **JSON**     | Playlist‑Snapshot, vollständige Metadaten, Basis aller Workflows |
+| **Registry** | Datei‑Tracking, Duplikate, Pfade, Reencode‑Status                |
+
+### Kurzfazit
+
+**Die JSON gehört zwingend zum Design.**
+Selbst wenn die Registry aktiviert ist, muss die JSON weiter erzeugt werden – sonst würden Tagging, Downloads, Planung und Reproduzierbarkeit zusammenbrechen.

@@ -170,6 +170,27 @@ python main.py debug-registry
 ```
 
 ---
+## 📷 Screenshots
+
+### CLI‑Übersicht
+![TrackBridge CLI Help](docs/img/trackbridge_cli_help.png)
+
+---
+
+### Sanity‑Check
+![TrackBridge Sanity Check](docs/img/trackbridge_sanity_check.png)
+
+---
+
+### Download‑Run (run-downloads)
+![TrackBridge Download Run](docs/img/trackbridge_run_downloads.png)
+
+---
+
+### Output‑Ordner (Beispiel)
+![TrackBridge Output Folder](docs/img/trackbridge_output_folder.png)
+
+---
 
 ## 🧪 Typischer Workflow
 

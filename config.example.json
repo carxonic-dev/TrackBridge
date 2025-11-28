@@ -2,7 +2,7 @@
   "SpotifyClientId": "",
   "SpotifyClientSecret": "",
 
-  "OutputDirectory": "D:/Projekte/20_DATA/Playlist_export_spotify",
+  "OutputDirectory": "~/Music/TrackBridge",
   "DefaultFormat": "json",
   "YTDLP_TextFilePattern": "spotify_{playlist_id}_yt-dlp.txt",
 
