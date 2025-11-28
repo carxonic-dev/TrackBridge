@@ -105,7 +105,7 @@ pip install -r requirements.txt
 
 ```json
 {
-  "OutputDirectory": "D:/Projekte/20_DATA/Playlist_export_spotify",
+  "OutputDirectory": "~/Music/TrackBridge",
   "MaxParallelDownloads": 2,
   "DownloadMaxRetries": 2,
   "SkipExistingFiles": true,
@@ -121,46 +121,52 @@ pip install -r requirements.txt
 
 ## 🧰 CLI‑Kommandos
 
-### sanity‑check
+### 🔧 **sanity-check**
 
-```
+```bash
 python main.py sanity-check
 ```
 
-### export
+### 📤 **export**
 
-```
-python main.py export --playlist-id <ID>
+```bash
+python main.py export --playlist-id <ID> --limit 50
 ```
 
-### export‑ytdlp
+### 🧾 **export‑ytdlp**
 
-```
+```bash
 python main.py export-ytdlp --playlist-id <ID>
 ```
 
-### plan‑downloads
+### 🗂 **plan‑downloads**
 
-```
-python main.py plan-downloads --playlist-id <ID>
+```bash
+python main.py plan-downloads --playlist-id <ID> --limit 10
 ```
 
-### run‑downloads
+### ⬇️ **run‑downloads**
 
-```
+```bash
 python main.py run-downloads --playlist-id <ID> --limit 20
 ```
 
-### tag‑playlist
+### 🏷 **tag‑playlist**
 
-```
-python main.py tag-playlist --playlist-id <ID>
+```bash
+python main.py tag-playlist --playlist-id <ID> --limit 10
 ```
 
-### analyze‑playlist
+### 🔍 **analyze‑playlist**
 
-```
+```bash
 python main.py analyze-playlist --playlist-id <ID>
+```
+
+### 🛠 **debug-registry**
+
+```bash
+python main.py debug-registry
 ```
 
 ---

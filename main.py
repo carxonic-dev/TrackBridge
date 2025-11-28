@@ -272,7 +272,7 @@ def build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------------------
     debug_parser = subparsers.add_parser(
         "debug-registry",
-        help="Zeigt eine einfache Statistik zur Track-Registry (Tracks, Files, URLs, Missing Files).",
+        help="Gibt eine Kurzstatistik der Track-Registry aus.",
     )
     debug_parser.set_defaults(func=handle_debug_registry)
 
