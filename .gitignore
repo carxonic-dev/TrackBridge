@@ -115,3 +115,4 @@ meine_playlist.json
 data/track_registry.db
 data/playlist_registry.db
 
+.vscode/
