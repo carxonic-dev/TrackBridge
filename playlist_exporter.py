@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping, Optional
 
 import requests
 
@@ -13,7 +13,8 @@ from util_filenames import build_audio_filename
 
 SPOTIFY_PLAYLIST_URL = "https://api.spotify.com/v1/playlists/{playlist_id}"
 SPOTIFY_AUDIO_FEATURES_URL = "https://api.spotify.com/v1/audio-features"
-
+SPOTIFY_ALBUM_URL = "https://api.spotify.com/v1/albums/{album_id}"
+SPOTIFY_ARTIST_URL = "https://api.spotify.com/v1/artists/{artist_id}"
 
 # ---------------------------------------------------------------------------
 # Low-Level: Playlist & Audio-Features holen
@@ -105,19 +106,153 @@ def _fetch_audio_features(
     return features_by_id
 
 
+def _normalize_genre(value: str) -> str:
+    """Genres leicht normalisieren: trimmen, erste Stelle klein, Rest unverändert."""
+    value = (value or "").strip()
+    if not value:
+        return ""
+    return value[0].lower() + value[1:]
+
+
+def _fetch_genres_for_tracks(
+    token: str,
+    tracks: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """
+    Holt Album- und Artist-Genres für eine Trackliste.
+
+    Rückgabe pro Track-ID:
+    {
+        "primary_genre": str | None,
+        "genres_album": list[str] | None,
+        "genres_artist": list[str] | None,
+        "genres_combined": list[str] | None,
+    }
+    """
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    album_cache: dict[str, dict[str, Any]] = {}
+    artist_cache: dict[str, dict[str, Any]] = {}
+    result: dict[str, dict[str, Any]] = {}
+
+    for t in tracks:
+        track_id = t.get("id")
+        if not track_id:
+            continue
+
+        album = t.get("album") or {}
+        album_id = album.get("id")
+
+        artists = t.get("artists") or []
+        primary_artist_id: Optional[str] = None
+        if artists and isinstance(artists[0], dict):
+            primary_artist_id = artists[0].get("id")
+
+        album_genres: list[str] = []
+        artist_genres: list[str] = []
+
+        # Album-Genres
+        if album_id:
+            cached = album_cache.get(album_id)
+            if cached is None:
+                resp = requests.get(
+                    SPOTIFY_ALBUM_URL.format(album_id=album_id),
+                    headers=headers,
+                    timeout=10,
+                )
+                if resp.ok:
+                    cached = resp.json()
+                else:
+                    cached = {}
+                album_cache[album_id] = cached
+
+            raw_album_genres = cached.get("genres") or []
+            if isinstance(raw_album_genres, list):
+                album_genres = [
+                    g for g in (_normalize_genre(x) for x in raw_album_genres) if g
+                ]
+
+        # Artist-Genres (nur Primary Artist)
+        if primary_artist_id:
+            cached = artist_cache.get(primary_artist_id)
+            if cached is None:
+                resp = requests.get(
+                    SPOTIFY_ARTIST_URL.format(artist_id=primary_artist_id),
+                    headers=headers,
+                    timeout=10,
+                )
+                if resp.ok:
+                    cached = resp.json()
+                else:
+                    cached = {}
+                artist_cache[primary_artist_id] = cached
+
+            raw_artist_genres = cached.get("genres") or []
+            if isinstance(raw_artist_genres, list):
+                artist_genres = [
+                    g for g in (_normalize_genre(x) for x in raw_artist_genres) if g
+                ]
+
+        # Hybrid-Logik C: erst Album, dann Artist
+        primary_genre: Optional[str] = None
+        if album_genres:
+            primary_genre = album_genres[0]
+        elif artist_genres:
+            primary_genre = artist_genres[0]
+
+        combined: list[str] = []
+        seen: set[str] = set()
+
+        def _add(g: Optional[str]) -> None:
+            if not g:
+                return
+            if g in seen:
+                return
+            seen.add(g)
+            combined.append(g)
+
+        # 1. Primary
+        _add(primary_genre)
+        # 2. Rest Album
+        for g in album_genres[1:]:
+            _add(g)
+            if len(combined) >= 3:
+                break
+        # 3. Artist-Genres
+        if len(combined) < 3:
+            for g in artist_genres:
+                _add(g)
+                if len(combined) >= 3:
+                    break
+
+        result[track_id] = {
+            "primary_genre": primary_genre,
+            "genres_album": album_genres or None,
+            "genres_artist": artist_genres or None,
+            "genres_combined": combined or None,
+        }
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Datentransformation: Extended-Track-Objekte
 # ---------------------------------------------------------------------------
 
 def _build_extended_tracks(
-    raw_tracks: List[Dict[str, Any]],
-    audio_features_by_id: Dict[str, Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+    playlist_full: Mapping[str, Any],
+    audio_features_by_id: Mapping[str, Mapping[str, Any]],
+    genre_info_by_track_id: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     """
     Baut aus rohen Spotify-Trackdaten + Audio Features eine Extended-Datenstruktur,
     die als Grundlage für ID3-Tagging, Dateinamen, Queue etc. dient.
     """
     extended: List[Dict[str, Any]] = []
+
+    # Alle Tracks aus dem zuvor angereicherten Playlist-Objekt holen
+    raw_tracks: list[dict[str, Any]] = playlist_full.get("__all_tracks__", [])
 
     for t in raw_tracks:
         track_id = t.get("id")
@@ -154,6 +289,9 @@ def _build_extended_tracks(
 
         filename = build_audio_filename(name, track_number)
 
+        # 👉 Genre-Infos für diesen Track ziehen
+        genre_info = genre_info_by_track_id.get(track_id, {}) if track_id else {}
+
         extended.append(
             {
                 # Identifikation
@@ -187,6 +325,12 @@ def _build_extended_tracks(
                 "key_notation": None,  # Platzhalter für z. B. "F#m"
                 "key_camelot": None,   # Platzhalter für z. B. "11A"
 
+                # Genre-Felder (Hybrid / Rich)
+                "primary_genre": genre_info.get("primary_genre"),
+                "genres_album": genre_info.get("genres_album"),
+                "genres_artist": genre_info.get("genres_artist"),
+                "genres_combined": genre_info.get("genres_combined"),
+
                 # Dateinamen-Vorschlag (ohne Pfad)
                 "suggested_filename": filename,
             }
@@ -204,14 +348,23 @@ def fetch_playlist_tracks_extended(
     gibt eine Struktur { playlist: {...}, tracks: [...] } zurück.
     """
     playlist_full = _fetch_playlist_full(access_token, playlist_id)
-    raw_tracks: List[Dict[str, Any]] = playlist_full.pop("__all_tracks__", [])
+    all_tracks: list[dict[str, Any]] = playlist_full.get("__all_tracks__", [])
 
-    track_ids: List[str] = [
-        str(t["id"]) for t in raw_tracks if t.get("id")
-    ]
+    audio_features_by_id = _fetch_audio_features(
+        access_token,
+        [t["id"] for t in all_tracks if t.get("id")],
+    )
 
-    audio_features_by_id = _fetch_audio_features(access_token, track_ids)
-    extended_tracks = _build_extended_tracks(raw_tracks, audio_features_by_id)
+    genre_info_by_track_id = _fetch_genres_for_tracks(
+        token=access_token,
+        tracks=all_tracks,
+    )
+
+    extended_tracks = _build_extended_tracks(
+        playlist_full,
+        audio_features_by_id,
+        genre_info_by_track_id,
+    )
 
     # Playlist-Metadaten extrahieren
     playlist_meta = {

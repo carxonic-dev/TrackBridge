@@ -121,7 +121,6 @@ def apply_tags_to_file(audio_path: Path, meta: Mapping[str, Any]) -> None:
 # Gemeinsame Metadaten-Aufbereitung
 # ---------------------------------------------------------------------------
 
-
 def _extract_tag_data(meta: Mapping[str, Any]) -> TrackTagData:
     """
     Wandelt das Metadaten-Dict aus der Extended-JSON in eine TrackTagData-Struktur.
@@ -129,13 +128,13 @@ def _extract_tag_data(meta: Mapping[str, Any]) -> TrackTagData:
     Erwartete Keys (alle optional):
     - title
     - primary_artist
-    - all_artists (Liste von Namen)
-    - album_name
+    - all_artists / artists (Liste von Namen)
+    - album_name / album
     - album_artist
     - track_number
-    - total_tracks
+    - total_tracks / album_total_tracks
     - disc_number
-    - release_year
+    - release_year / release_date
     - genre / main_genre
     - bpm
     - key_label / musical_key
@@ -144,15 +143,39 @@ def _extract_tag_data(meta: Mapping[str, Any]) -> TrackTagData:
 
     title = cleanup_str(meta.get("title"))
     primary_artist = cleanup_str(meta.get("primary_artist"))
-    album_name = cleanup_str(meta.get("album_name"))
+
+    album_name = cleanup_str(meta.get("album_name") or meta.get("album"))
     album_artist = cleanup_str(meta.get("album_artist") or primary_artist)
-    genre = cleanup_str(meta.get("genre") or meta.get("main_genre"))
     spotify_url = cleanup_str(meta.get("spotify_url"))
 
-    # Künstlerliste
-    artists_raw = meta.get("all_artists", [])
-    artists_list: list[str] = []
+    # Rich-Genre: bevorzugt genres_combined, dann primary_genre, dann alte Felder
+    genres_combined = meta.get("genres_combined")
+    primary_genre = cleanup_str(meta.get("primary_genre"))
 
+    genre: Optional[str] = None
+
+    if isinstance(genres_combined, list) and genres_combined:
+        cleaned_genres: list[str] = []
+        for g in genres_combined:
+            s = cleanup_str(g)
+            if s:
+                cleaned_genres.append(s)
+
+        if cleaned_genres:
+            # Rich-Mode: mehrere Genres mit Semikolon trennen
+            genre = "; ".join(cleaned_genres)
+    elif primary_genre:
+        genre = primary_genre
+    else:
+        genre = cleanup_str(meta.get("genre") or meta.get("main_genre"))
+
+
+    # Künstlerliste: "all_artists" bevorzugen, sonst "artists"
+    artists_raw = meta.get("all_artists")
+    if artists_raw is None:
+        artists_raw = meta.get("artists", [])
+
+    artists_list: list[str] = []
     if isinstance(artists_raw, list):
         tmp = [cleanup_str(a) for a in artists_raw if isinstance(a, str)]
         artists_list = [a for a in tmp if a]  # None & leer raus
@@ -179,7 +202,15 @@ def _extract_tag_data(meta: Mapping[str, Any]) -> TrackTagData:
     track_number = _to_int(meta.get("track_number"))
     track_total = _to_int(meta.get("total_tracks") or meta.get("album_total_tracks"))
     disc_number = _to_int(meta.get("disc_number"))
-    year = _to_int(meta.get("release_year"))
+
+    # Jahr: zuerst "release_year", sonst aus "release_date" (YYYY-MM-DD) ableiten
+    release_year_value: Any = meta.get("release_year")
+    if release_year_value is None:
+        release_date = meta.get("release_date")
+        if isinstance(release_date, str) and release_date:
+            release_year_value = release_date[:4]
+
+    year = _to_int(release_year_value)
 
     bpm = _to_float(meta.get("bpm"))
     musical_key = cleanup_str(meta.get("key_label") or meta.get("musical_key"))
@@ -192,7 +223,6 @@ def _extract_tag_data(meta: Mapping[str, Any]) -> TrackTagData:
     if musical_key:
         comment_parts.append(f"Key: {musical_key}")
     comment = " | ".join(comment_parts) if comment_parts else None
-
 
     # Cover-Bytes sind aktuell noch nicht aus der JSON befüllt - Platzhalter
     cover_bytes: Optional[bytes] = None
